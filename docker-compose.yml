@@ -1,0 +1,88 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - ./startup.sh:/startup.sh:ro
+      - nginx_logs:/var/log/nginx
+    environment:
+      - ACTIVE_POOL=${ACTIVE_POOL:-blue}
+      - RELEASE_ID_BLUE=${RELEASE_ID_BLUE:-blue-release}
+      - RELEASE_ID_GREEN=${RELEASE_ID_GREEN:-green-release}
+    depends_on:
+      - app-blue
+      - app-green
+    command: ["/bin/sh", "/startup.sh"]
+
+  app-blue:
+    image: ${BLUE_IMAGE:-yimikaade/wonderful:devops-stage-two}
+    environment:
+      - APP_POOL=blue
+      - RELEASE_ID=${RELEASE_ID_BLUE:-blue-release}
+      - PORT=3000
+    ports:
+      - "8081:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/healthz",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
+  app-green:
+    image: ${GREEN_IMAGE:-yimikaade/wonderful:devops-stage-two}
+    environment:
+      - APP_POOL=green
+      - RELEASE_ID=${RELEASE_ID_GREEN:-green-release}
+      - PORT=3000
+    ports:
+      - "8082:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/healthz",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+
+  alert_watcher:
+    image: python:3.11-slim
+    restart: unless-stopped
+    volumes:
+      - ./alert_watcher:/app:ro
+      - nginx_logs:/var/log/nginx:ro
+    env_file:
+      - .env
+    depends_on:
+      - nginx
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "pip install --no-cache-dir -r /app/requirements.txt && python /app/watcher.py",
+      ]
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  nginx_logs:
+    driver: local
