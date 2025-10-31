@@ -5,8 +5,9 @@ set -e
 
 echo "Starting Blue/Green deployment with ACTIVE_POOL=${ACTIVE_POOL}"
 
-# Copy our template with custom logging to nginx.conf
-cp /etc/nginx/templates/nginx.conf.template /etc/nginx/nginx.conf
+# Render template: replace ${ACTIVE_POOL} placeholders with the environment value
+# Use sed to perform a simple variable substitution so nginx receives a static config
+sed "s/\${ACTIVE_POOL}/${ACTIVE_POOL}/g" /etc/nginx/templates/nginx.conf.template > /etc/nginx/nginx.conf
 
 # Create log directory if it doesn't exist
 mkdir -p /var/log/nginx
