@@ -63,12 +63,24 @@ def parse_line(line: str) -> dict:
         except Exception:
             status = None
 
-    pool = fields.get("pool")
-    release = fields.get("release")
-    upstream_status = fields.get("upstream_status")
-    upstream_addr = fields.get("upstream_addr")
-    request_time = fields.get("request_time")
-    upstream_response_time = fields.get("upstream_response_time")
+    # Get pool from either X-App-Pool header or active upstream
+    pool = None
+    if fields.get("pool"):
+        pool = fields.get("pool")
+    elif "upstream_addr" in fields:
+        # Try to infer pool from upstream address
+        upstream = fields.get("upstream_addr")
+        if "app-blue" in upstream:
+            pool = "blue"
+        elif "app-green" in upstream:
+            pool = "green"
+    
+    # Get release from either header or environment
+    release = fields.get("release") or "unknown"
+    upstream_status = fields.get("upstream_status") or "-"
+    upstream_addr = fields.get("upstream_addr") or "-"
+    request_time = fields.get("request_time") or "-"
+    upstream_response_time = fields.get("upstream_response_time") or "-"
 
     return {
         "status": status,
@@ -119,7 +131,12 @@ def main():
             if MAINTENANCE_MODE:
                 logger.info("Pool flip detected (%s -> %s) but maintenance mode is ON — suppressing alert", last_seen_pool, pool)
             elif now - last_alert_time.get("failover", 0) >= ALERT_COOLDOWN_SEC:
-                text = f":rotating_light: Failover detected: {last_seen_pool.upper()} -> {pool.upper()}\nRelease: {data.get('release')}\nUpstream: {data.get('upstream_addr')} upstream_status={data.get('upstream_status')}"
+                text = (f":rotating_light: *Failover Detected*\n"
+                       f"• From Pool: `{last_seen_pool.upper()}`\n"
+                       f"• To Pool: `{pool.upper()}`\n"
+                       f"• Release: `{data.get('release')}`\n"
+                       f"• Upstream: `{data.get('upstream_addr')}`\n"
+                       f"• Status: `{data.get('upstream_status')}`")
                 sent = send_slack(text)
                 if sent:
                     last_alert_time["failover"] = now
@@ -149,7 +166,12 @@ def main():
                 if MAINTENANCE_MODE:
                     logger.info("High error rate (%.2f%%) but maintenance mode ON — suppressing", error_rate)
                 elif now - last_alert_time.get("error_rate", 0) >= ALERT_COOLDOWN_SEC:
-                    text = f":warning: Elevated 5xx error rate: {error_rate:.2f}% over last {len(window)} requests (threshold {ERROR_RATE_THRESHOLD}%).\nLast upstream: {data.get('upstream_addr')} upstream_status={data.get('upstream_status')}\nPool: {pool}"
+                    text = (f":warning: *Elevated Error Rate*\n"
+                           f"• Rate: `{error_rate:.2f}%` over last {len(window)} requests\n"
+                           f"• Threshold: `{ERROR_RATE_THRESHOLD}%`\n"
+                           f"• Active Pool: `{pool.upper() if pool else 'UNKNOWN'}`\n"
+                           f"• Last Upstream: `{data.get('upstream_addr')}`\n"
+                           f"• Last Status: `{data.get('upstream_status')}`")
                     sent = send_slack(text)
                     if sent:
                         last_alert_time["error_rate"] = now
