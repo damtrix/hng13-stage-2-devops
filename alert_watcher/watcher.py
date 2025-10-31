@@ -132,8 +132,7 @@ def main():
                 logger.info("Pool flip detected (%s -> %s) but maintenance mode is ON — suppressing alert", last_seen_pool, pool)
             elif now - last_alert_time.get("failover", 0) >= ALERT_COOLDOWN_SEC:
                 text = (f":rotating_light: *Failover Detected*\n"
-                       f"• From Pool: `{last_seen_pool.upper()}`\n"
-                       f"• To Pool: `{pool.upper()}`\n"
+                       f"• Pool: `{last_seen_pool.upper()} -> {pool.upper()}`\n"
                        f"• Release: `{data.get('release')}`\n"
                        f"• Upstream: `{data.get('upstream_addr')}`\n"
                        f"• Status: `{data.get('upstream_status')}`")
